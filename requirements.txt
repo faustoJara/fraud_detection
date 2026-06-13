@@ -1,0 +1,9 @@
+apache-airflow==2.9.3
+kafka-python
+pyspark
+boto3
+neo4j
+sqlalchemy
+psycopg2-binary
+pandas
+transformers

@@ -1,0 +1,9 @@
+venv/
+__pycache__/
+*.pyc
+.env
+logs/
+dags/__pycache__/
+workspace/
+
+# para activar el entorno conda activate lakehouse_env
