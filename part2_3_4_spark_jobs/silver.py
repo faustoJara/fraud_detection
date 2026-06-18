@@ -15,6 +15,7 @@ def main():
         .config("spark.hadoop.fs.s3a.endpoint", "http://minio:9000") \
         .config("spark.hadoop.fs.s3a.access.key", "minio") \
         .config("spark.hadoop.fs.s3a.secret.key", "minio123") \
+            .config("spark.sql.catalog.lakehouse.jdbc.schema-version", "V1") \
         .config("spark.hadoop.fs.s3a.path.style.access", "true") \
         .config("spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem") \
         .config("spark.sql.extensions", "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions") \
@@ -22,7 +23,7 @@ def main():
 
     spark.sparkContext.setLogLevel("WARN")
 
-    tabla_origen = "lakehouse.payments.bronze_payments_v2"
+    tabla_origen = "lakehouse.payments.bronze_payments_parte2"
     tabla_destino = "lakehouse.payments.silver_payments_parte3"
 
     print(f"📖 Leyendo datos crudos desde {tabla_origen}...")

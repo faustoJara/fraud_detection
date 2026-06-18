@@ -141,7 +141,7 @@ services:
     container_name: trino
     depends_on:
       postgres: {condition: service_healthy}
-    ports: ["8080:8080"]
+    ports: ["9080:8080"]
     volumes:
       # Asume que tienes tus catálogos configurados en esta ruta
       - ./config/trino/catalog:/etc/trino/catalog
@@ -150,37 +150,131 @@ services:
 
   superset:
     image: apache/superset:latest
+    build:
+      context: .
+      dockerfile: superset/Dockerfile
     container_name: superset
     ports: ["8088:8088"]
     environment:
       SUPERSET_SECRET_KEY: "tu_clave_secreta_superset"
+      SUPERSET_CONFIG_PATH: /app/pythonpath/superset_config.py
+      ADDITIONAL_PIP_PACKAGES: "trino sqlalchemy-trino sqlalchemy==1.4.54"
+    volumes:
+      # Montamos el archivo de configuración y el de registro dentro del contenedor
+      - ./superset/requirements.txt:/app/docker/requirements.txt
+      - ./superset/superset_config.py:/app/pythonpath/superset_config.py
+      - ./superset/register_trino.py:/app/pythonpath/register_trino.py
+    command: ["/bin/sh", "-c", "/usr/bin/run-server.sh"]
     depends_on: [trino]
     networks:
       - lakehouse
-
   # -----------------------------------------
   # 6. ORQUESTACIÓN (Airflow)
   # -----------------------------------------
+  
   airflow-init:
-    <<: *airflow-common
-    container_name: airflow-init
-    command: bash -lc "airflow db migrate && airflow users create --username admin --password admin --firstname Admin --lastname User --role Admin --email admin@example.com"
+    build:
+      context: .
+      dockerfile: airflow/Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+      AIRFLOW__CORE__DAGS_FOLDER: /opt/project/airflow/dags
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER:-lakehouse}:${POSTGRES_PASSWORD:-lakehouse}@postgres:5432/${POSTGRES_DB:-platform}
+      AIRFLOW__WEBSERVER__EXPOSE_CONFIG: "False"
+      AIRFLOW__API__AUTH_BACKENDS: airflow.api.auth.backend.basic_auth
+      _PIP_ADDITIONAL_REQUIREMENTS: ""
+    entrypoint:
+      - /bin/bash
+      - -c
+      - >
+        airflow db migrate &&
+        airflow users create --role Admin --username ${AIRFLOW_ADMIN_USER:-admin} --email ${AIRFLOW_ADMIN_EMAIL:-admin@example.com} --firstname Airflow --lastname Admin --password ${AIRFLOW_ADMIN_PASSWORD:-admin} || true
+    volumes:
+      - ./:/opt/project
+      - ./runtime/airflow:/opt/airflow
+    networks:
+      - lakehouse
 
   airflow-webserver:
-    <<: *airflow-common
-    container_name: airflow-webserver
-    ports: ["8081:8080"]
-    command: webserver
+    build:
+      context: .
+      dockerfile: airflow/Dockerfile
+    restart: unless-stopped
     depends_on:
-      airflow-init: {condition: service_completed_successfully}
+      airflow-init:
+        condition: service_completed_successfully
+      neo4j:
+        condition: service_started
+      trino:
+        condition: service_started
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+      AIRFLOW__CORE__DAGS_FOLDER: /opt/project/airflow/dags
+      AIRFLOW__CORE__PARALLELISM: "4"
+      AIRFLOW__CORE__MAX_ACTIVE_TASKS_PER_DAG: "2"
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER:-lakehouse}:${POSTGRES_PASSWORD:-lakehouse}@postgres:5432/${POSTGRES_DB:-platform}
+      AIRFLOW__WEBSERVER__EXPOSE_CONFIG: "False"
+      AIRFLOW__WEBSERVER__WORKERS: "1"
+      AIRFLOW__API__AUTH_BACKENDS: airflow.api.auth.backend.basic_auth
+      TRINO_HOST: trino
+      TRINO_PORT: "8080"
+      TRINO_CATALOG: lakehouse
+      TRINO_SCHEMA: payments
+      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_USER: neo4j
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD:-neo4j_password}
+      PYTHONPATH: /opt/project
+      AIRFLOW__WEBSERVER__WEB_SERVER_MASTER_TIMEOUT: "300"
+    command: airflow webserver
+    ports:
+      - "${AIRFLOW_PORT:-8081}:8080"
+    volumes:
+      - ./:/opt/project
+      - ./runtime/airflow:/opt/airflow
+    networks:
+      - lakehouse
 
   airflow-scheduler:
-    <<: *airflow-common
-    container_name: airflow-scheduler
-    command: scheduler
+    build:
+      context: .
+      dockerfile: airflow/Dockerfile
+    restart: unless-stopped
     depends_on:
-      airflow-init: {condition: service_completed_successfully}
-
+      airflow-init:
+        condition: service_completed_successfully
+      neo4j:
+        condition: service_started
+      trino:
+        condition: service_started
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+      AIRFLOW__CORE__DAGS_FOLDER: /opt/project/airflow/dags
+      AIRFLOW__CORE__PARALLELISM: "4"
+      AIRFLOW__CORE__MAX_ACTIVE_TASKS_PER_DAG: "2"
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER:-lakehouse}:${POSTGRES_PASSWORD:-lakehouse}@postgres:5432/${POSTGRES_DB:-platform}
+      AIRFLOW__WEBSERVER__EXPOSE_CONFIG: "False"
+      AIRFLOW__SCHEDULER__PARSING_PROCESSES: "1"
+      AIRFLOW__API__AUTH_BACKENDS: airflow.api.auth.backend.basic_auth
+      TRINO_HOST: trino
+      TRINO_PORT: "8080"
+      TRINO_CATALOG: lakehouse
+      TRINO_SCHEMA: payments
+      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_USER: neo4j
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD:-neo4j_password}
+      PYTHONPATH: /opt/project
+    command: airflow scheduler
+    volumes:
+      - ./:/opt/project
+      - ./runtime/airflow:/opt/airflow
+    networks:
+      - lakehouse
 networks:
   lakehouse:
     driver: bridge
