@@ -7,3 +7,33 @@ dags/__pycache__/
 workspace/
 
 # para activar el entorno conda activate lakehouse_env
+
+# === Secretos y Entorno ===
+.env
+
+# === Python e IDEs ===
+__pycache__/
+*.pyc
+.vscode/
+.idea/
+
+# === Infraestructura Local y Datos (Lakehouse) ===
+derby.log
+metastore_db/
+runtime/
+# Evita subir los CSV de intercambio de datos de Neo4j o Airflow
+airflow/runtime/
+*.csv
+
+# === Logs del Sistema ===
+*.log
+logs/
+
+.venv/
+
+# Modelos e Historial de Inteligencia Artificial (Hugging Face)
+fraud_model_results/
+fraud_model_results_final/
+
+# Datasets pesados
+datasets/
