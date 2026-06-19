@@ -19,7 +19,7 @@ AWS_ACCESS_KEY = os.getenv("AWS_ACCESS_KEY_ID")
 AWS_SECRET_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
 AWS_SESSION_TOKEN = os.getenv("AWS_SESSION_TOKEN")
 AWS_REGION = os.getenv("AWS_REGION", "us-east-1")
-S3_BUCKET = os.getenv("S3_BUCKET", "lakehouse-ricardo-sdb-2026")
+S3_BUCKET = os.getenv("S3_BUCKET", "lakehouse-fausto-sdb-2026")
 
 # Nombre del modelo base en Hugging Face y directorios de salida
 MODEL_NAME = "distilbert-base-uncased"
